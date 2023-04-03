@@ -101,14 +101,14 @@ def fill_blanks(raw_text: str, model, tokenizer, strategy) -> Tuple[List[str], L
 
         output_list = []
 
-        input_seq = torch.cuda.LongTensor(
+        input_seq = torch.mlu.LongTensor(
             [seq + [tokenizer.get_command("sop")]],
             device=args.device,
         )
         output, _ = batch_filling_sequence(
             model,
             input_seq,
-            torch.cuda.LongTensor([input_seq.shape[-1]], device=args.device),
+            torch.mlu.LongTensor([input_seq.shape[-1]], device=args.device),
             strategy=strategy,
             get_masks_and_position_ids=partial(
                 get_masks_and_position_ids,

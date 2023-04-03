@@ -38,7 +38,7 @@ def gather_result(prediction, total_length, micro_batch_size):
     @param total_length: Total sample num
     @return: [sample_0, sample_1, ..., sample_{total_length-1}]
     """
-    torch.cuda.empty_cache()
+    torch.mlu.empty_cache()
     world_size = mpu.get_data_parallel_world_size()
     prediction_gathered = [None for _ in range(world_size)]
     dist.all_gather_object(prediction_gathered, prediction, group=mpu.get_data_parallel_group())

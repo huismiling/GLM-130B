@@ -1,5 +1,6 @@
 import argparse
 import torch
+import torch_mlu
 import time
 
 from quantization import quantize
@@ -10,6 +11,7 @@ from SwissArmyTransformer.training import load_checkpoint
 from SwissArmyTransformer.model import GLM130B
 from SwissArmyTransformer.mpu import get_model_parallel_world_size, get_model_parallel_rank, get_model_parallel_group
 
+torch_mlu.core.mlu_model.set_memory_strategy(True)
 
 def add_bminf_args(parser):
     """Arguments for BMInf"""
@@ -80,7 +82,7 @@ def initialize_model_and_tokenizer(args):
 
                 if torch.distributed.get_rank() == 0:
                     print(f"> BMInf activated, memory limit: {args.bminf_memory_limit} GB")
-                with torch.cuda.device(args.device):
+                with torch.mlu.device(args.device):
                     model = bminf.wrapper(model, quantization=False, memory_limit=args.bminf_memory_limit << 30)
             else:
                 model = model.to(args.device)
@@ -91,7 +93,7 @@ def initialize_model_and_tokenizer(args):
     if torch.distributed.get_rank() == 0:
         print(f"> Model initialized in {time.time() - start:.1f}s")
 
-    torch.cuda.empty_cache()
+    torch.mlu.empty_cache()
     model.eval()
 
     # generate rotary embedding cache
@@ -99,14 +101,14 @@ def initialize_model_and_tokenizer(args):
     model.transformer.parallel_output = True
     with torch.no_grad():
         _, *_ = model(
-            torch.ones(1, args.max_sequence_length, device=torch.cuda.current_device(), dtype=torch.int64),
-            torch.arange(args.max_sequence_length, device=torch.cuda.current_device(), dtype=torch.int64).view(1, -1),
+            torch.ones(1, args.max_sequence_length, device=torch.mlu.current_device(), dtype=torch.int64),
+            torch.arange(args.max_sequence_length, device=torch.mlu.current_device(), dtype=torch.int64).view(1, -1),
             torch.randn(
                 1,
                 1,
                 args.max_sequence_length,
                 args.max_sequence_length,
-                device=torch.cuda.current_device(),
+                device=torch.mlu.current_device(),
             )
             < 0.5,
         )

@@ -88,7 +88,7 @@ def merge_weights(
     if quantization_bit_width is not None:
         from kernels import compress_int4_weight
 
-        weight = merged_sd.cuda()
+        weight = merged_sd.mlu()
         weight_scale = (weight.abs().max(dim=-1).values / ((2 ** (quantization_bit_width - 1)) - 1)).half()
         weight = torch.round(weight / weight_scale[:, None]).to(torch.int8)
         if quantization_bit_width == 4:
