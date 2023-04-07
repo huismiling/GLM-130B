@@ -11,9 +11,9 @@ if __name__ == "__main__":
         start = time.time()
         with torch.no_grad():
             _, *_ = model(
-                torch.ones(1, seq_len, device=torch.cuda.current_device(), dtype=torch.int64),
-                torch.arange(seq_len, device=torch.cuda.current_device(), dtype=torch.int64).view(1, -1),
-                torch.randn(1, 1, seq_len, seq_len, device=torch.cuda.current_device()) < 0.5,
+                torch.ones(1, seq_len, device=torch.mlu.current_device(), dtype=torch.int64),
+                torch.arange(seq_len, device=torch.mlu.current_device(), dtype=torch.int64).view(1, -1),
+                torch.randn(1, 1, seq_len, seq_len, device=torch.mlu.current_device()) < 0.5,
             )
         torch.distributed.barrier()
         if torch.distributed.get_rank() == 0:

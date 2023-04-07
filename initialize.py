@@ -11,8 +11,6 @@ from SwissArmyTransformer.training import load_checkpoint
 from SwissArmyTransformer.model import GLM130B
 from SwissArmyTransformer.mpu import get_model_parallel_world_size, get_model_parallel_rank, get_model_parallel_group
 
-torch_mlu.core.mlu_model.set_memory_strategy(True)
-
 def add_bminf_args(parser):
     """Arguments for BMInf"""
     group = parser.add_argument_group("BMInf")
