@@ -1,0 +1,170 @@
+/*************************************************************************
+ * Copyright (C) [2022] by Cambricon, Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *************************************************************************/
+#include "kernel.h"
+#include "common.h"
+#include "binary_op_3pipeline.h"
+
+#define QAT_NRAM_USED MAX_NRAM_SIZE
+#define QAT_SRAM_USED (CORE_DIM * QAT_NRAM_USED)
+
+__nram__ char nram_buffer[QAT_NRAM_USED];
+
+template <typename T>
+__mlu_func__ void get3OffsetDeQatFast(int32_t &nram_limit, int32_t &pong_x,
+                                       int32_t &pong_y, T *&nram_x, T *&nram_y,
+                                       T *&nram_aux1, T *&nram_aux2,
+                                       T *&nram_aux3, char *nram_buffer, 
+                                       int32_t data_num1
+                                       ) {
+    // y max : 512*sizeof(T) *2
+    // nram: x(int4/8 + T) - x_pong(int4/8 + T)
+    nram_limit = (QAT_NRAM_USED / sizeof(T) - 1024) / 4;
+    nram_limit = FLOOR_ALIGN(nram_limit, data_num1);
+    pong_x = nram_limit*2;
+    pong_y = 512;
+    nram_x = (T *)nram_buffer;  // nram_x_pong = nram_x + nram_limit
+    nram_y = nram_x + nram_limit*4;
+}
+
+template <typename T>
+__mlu_func__ void computeDeQatI4Fast(T *nram_x, T *nram_y, T *nram_scaling,
+                                    T *nram_aux2, T *nram_zero,
+                                    int32_t deal_num, int32_t k
+                                    ) {
+    T *nram_x_t = (T*)(nram_x + deal_num);
+    if (sizeof(T) == 2) {
+        __bang_int42half_dn((half*)nram_x_t, (int4x2_t *)nram_x, deal_num, 0);
+    }
+    else {
+        __bang_int42float_dn((float*)nram_x_t, (int4x2_t *)nram_x, deal_num, 0);
+    }
+    __bang_cycle_mul(nram_x, nram_x_t, nram_y, deal_num, deal_num / k);
+}
+
+template <typename T>
+__mlu_func__ void computeDeQatI8Fast(T *nram_x, T *nram_y, T *nram_scaling,
+                                    T *nram_aux2, T *nram_zero,
+                                    int32_t deal_num, int32_t k
+                                    ) {
+    T *nram_x_t = (T*)(nram_x + deal_num);
+    if (sizeof(T) == 2) {
+        __bang_int82half((half*)nram_x_t, (int8_t *)nram_x, deal_num, 0);
+    }
+    else {
+        __bang_int82float((float*)nram_x_t, (int8_t *)nram_x, deal_num, 0);
+    }
+
+    __bang_transpose((T*)nram_x, (T*)nram_x_t, deal_num / k, k);
+    __bang_cycle_mul((T*)nram_x_t, (T*)nram_x, (T*)nram_y, deal_num, deal_num / k);
+    __bang_transpose((T*)nram_x, (T*)nram_x_t, k, deal_num / k);
+
+}
+
+// function implementation
+BINARY_OP_3PIPELINE_IMPLE(DeQatI4, float, Fast);
+BINARY_OP_3PIPELINE_IMPLE(DeQatI4, half, Fast);
+
+BINARY_OP_3PIPELINE_IMPLE(DeQatI8, float, Fast);
+BINARY_OP_3PIPELINE_IMPLE(DeQatI8, half, Fast);
+
+extern "C" void int4WeightExtractionHalf(const int8_t* weight,
+        const void* scale_list,
+        void* output,
+        void* queue,
+        const int n,
+        const int k){
+            cnrtDim3_t dim = {(unsigned int)64, 1, 1};
+            cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+
+            MLUBlockKernel3StagePipelineDeQatI4halfFast<<<dim, ktype, (cnrtQueue_t)queue>>>(
+                (half*)weight, (half*)scale_list, (half*)output, n, k, 4);
+        }
+
+extern "C" void int4WeightExtractionFloat(const int8_t* weight,
+        const void* scale_list,
+        void* output,
+        void* queue,
+        const int n,
+        const int k){
+            cnrtDim3_t dim = {(unsigned int)64, 1, 1};
+            cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+
+            MLUBlockKernel3StagePipelineDeQatI4floatFast<<<dim, ktype, (cnrtQueue_t)queue>>>(
+                (float*)weight, (float*)scale_list, (float*)output, n, k, 4);
+        }
+
+extern "C" void int8WeightExtractionHalf(const int8_t* weight,
+        const void* scale_list,
+        void* output,
+        void* queue,
+        const int n,
+        const int k){
+            cnrtDim3_t dim = {(unsigned int)64, 1, 1};
+            cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+
+            MLUBlockKernel3StagePipelineDeQatI8halfFast<<<dim, ktype, (cnrtQueue_t)queue>>>(
+                (half*)weight, (half*)scale_list, (half*)output, n, k, 8);
+        }
+
+extern "C" void int8WeightExtractionFloat(const int8_t* weight,
+        const void* scale_list,
+        void* output,
+        void* queue,
+        const int n,
+        const int k){
+            cnrtDim3_t dim = {(unsigned int)64, 1, 1};
+            cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+
+            MLUBlockKernel3StagePipelineDeQatI8floatFast<<<dim, ktype, (cnrtQueue_t)queue>>>(
+                (float*)weight, (float*)scale_list, (float*)output, n, k, 8);
+        }
+
+__mlu_global__ void
+int4WeightCompressionDevice(const int8_t* input,
+                                int8_t* output,
+                                const int n,
+                                const int k)
+{
+#if (__BANG_ARCH__ >= 372)
+    int ele_num = k;  // (MAX_NRAM_SIZE - k*sizeof(T)) / (1 + 2*sizeof(T));
+    int off_set = 0;
+    int8_t *ram_inp      = (int8_t*)(nram_buffer + off_set); off_set += k*sizeof(int8_t);
+    int4x2_t *ram_out    = (int4x2_t*)(nram_buffer + off_set); off_set += ele_num/2*sizeof(int4x2_t);
+
+    __memcpy(ram_inp, input + taskIdX*k,     ele_num*sizeof(int8_t), GDRAM2NRAM);
+    __bang_int82int4_dn(ram_out, ram_inp, k, 0, 0);
+    __memcpy((int8_t *)output+taskIdX*k*sizeof(int4x2_t)/2, ram_out, k*sizeof(int4x2_t)/2, NRAM2GDRAM);
+
+#endif
+}
+
+extern "C" void int4WeightCompression(const int8_t* input,
+        int8_t* output,
+        void* queue,
+        const int n,
+        const int k){
+            cnrtDim3_t dim = {(unsigned int)n, 1, 1};
+            cnrtFunctionType_t ktype = CNRT_FUNC_TYPE_BLOCK;
+
+            int4WeightCompressionDevice<<<dim, ktype, (cnrtQueue_t)queue>>>(input, output, n, k);
+        }
