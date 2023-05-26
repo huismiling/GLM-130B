@@ -7,13 +7,12 @@ from typing import List
 
 RESOURCE_PACKAGE_NAME = __name__
 
-torch.set_printoptions(precision=6, linewidth=160)
 
 class Kernel:
     def __init__(self, filename: str, function_names: List[str]):
         filename = filename + ".so"
-        if not pkg_resources.resource_exists(RESOURCE_PACKAGE_NAME, filename):
-            raise RuntimeError("File `%s` not found in `%s`" % (filename, RESOURCE_PACKAGE_NAME))
+        # if not pkg_resources.resource_exists(RESOURCE_PACKAGE_NAME, filename):
+        #     raise RuntimeError("File `%s` not found in `%s`" % (filename, RESOURCE_PACKAGE_NAME))
         self.filename = filename
         self.lib = ctypes.cdll.LoadLibrary(filename)
         # self.code = pkg_resources.resource_string(RESOURCE_PACKAGE_NAME, filename)
@@ -23,9 +22,10 @@ class Kernel:
         for name in self._function_names:
             setattr(self, name, getattr(self.lib, name))
 
-
+import os
+cur_dir = os.path.dirname(__file__)
 kernels = Kernel(
-    "quantization",
+    f"{cur_dir}/quantization",
     [
         "int4WeightCompression",
         "int4WeightExtractionFloat",
