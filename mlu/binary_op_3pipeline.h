@@ -124,7 +124,7 @@ __mlu_func__ void processBinaryPipe3(const Dtype *x, const Dtype *y, Dtype *z,
         __memcpy_async(nram_x + (repeat % 2) * pong_x,
                     base_addr_x + repeat * x_offset, rem, GDRAM2NRAM);
         __memcpy_async(nram_y + (repeat % 2) * pong_y,
-                    base_addr_y + repeat * y_offset, rem*sizeof(Dtype), GDRAM2NRAM);
+                    base_addr_y + repeat * y_offset, rem / data_num1*sizeof(Dtype), GDRAM2NRAM);
     }
     if (repeat > 0) {
         // C
