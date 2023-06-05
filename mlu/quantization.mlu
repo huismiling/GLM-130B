@@ -61,9 +61,12 @@ __mlu_func__ void computeDeQatI4Fast(T *nram_x, T *nram_y, T *nram_scaling,
     else {
         __bang_int42float_dn((float*)nram_x_t, (int4x2_t *)nram_x, deal_num, 0);
     }
-    __bang_transpose((T*)nram_x, (T*)nram_x_t, deal_num / k, k);
-    __bang_cycle_mul(nram_x, nram_x_t, nram_y, deal_num, deal_num / k);
-    __bang_transpose((T*)nram_x, (T*)nram_x_t, k, deal_num / k);
+    // __bang_transpose((T*)nram_x, (T*)nram_x_t, deal_num / k, k);
+    // __bang_cycle_mul(nram_x, nram_x_t, nram_y, deal_num, deal_num / k);
+    for(int it=0; it<deal_num / k; it++){
+        __bang_mul_scalar((T*)nram_x + it*k, (T*)nram_x_t + it*k, nram_y[it], k);
+    }
+    // __bang_transpose((T*)nram_x, (T*)nram_x_t, k, deal_num / k);
 }
 
 // #define __PERF_TIME__ 1
@@ -93,7 +96,7 @@ __mlu_func__ void computeDeQatI8Fast(T *nram_x, T *nram_y, T *nram_scaling,
         gettimeofday(&start, NULL);
     #endif
 
-    __bang_transpose((T*)nram_x, (T*)nram_x_t, deal_num / k, k);
+    // __bang_transpose((T*)nram_x, (T*)nram_x_t, deal_num / k, k);
 
     #ifdef __PERF_TIME__
         gettimeofday(&end, NULL);
@@ -101,17 +104,29 @@ __mlu_func__ void computeDeQatI8Fast(T *nram_x, T *nram_y, T *nram_scaling,
         printf("taskId:%d, __bang_transpose0 Time: %u us\n", taskId, time_usec);
         gettimeofday(&start, NULL);
     #endif
-    __bang_cycle_mul((T*)nram_x_t, (T*)nram_x, (T*)nram_y, deal_num, deal_num / k);
+
+    // __bang_cycle_mul((T*)nram_x_t, (T*)nram_x, (T*)nram_y, deal_num, deal_num / k);
+    for(int it=0; it<deal_num / k; it++){
+        __bang_mul_scalar((T*)nram_x + it*k, (T*)nram_x_t + it*k, nram_y[it], k);
+    }
+
+
+    // #ifdef __PERF_TIME__
+    //     gettimeofday(&end, NULL);
+    //     time_usec = (uint32_t)end.tv_usec - (uint32_t)start.tv_usec;
+    //     printf("taskId:%d, __bang_cycle_mul Time: %u us, deal_num / k:%d \n", taskId, time_usec, deal_num / k);
+    //     gettimeofday(&start, NULL);
+    // #endif
     // __bang_mul((T*)nram_x, (T*)nram_x, (T*)nram_x_t, deal_num);
 
     #ifdef __PERF_TIME__
         gettimeofday(&end, NULL);
         time_usec = (uint32_t)end.tv_usec - (uint32_t)start.tv_usec;
-        printf("taskId:%d, __bang_cycle_mul Time: %u us\n", taskId, time_usec);
+        printf("taskId:%d, __bang_mul_scalar Time: %u us\n", taskId, time_usec);
         gettimeofday(&start, NULL);
     #endif
 
-    __bang_transpose((T*)nram_x, (T*)nram_x_t, k, deal_num / k);
+    // __bang_transpose((T*)nram_x, (T*)nram_x_t, k, deal_num / k);
 
     #ifdef __PERF_TIME__
         gettimeofday(&end, NULL);

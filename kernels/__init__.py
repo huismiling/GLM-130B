@@ -23,7 +23,7 @@ class Kernel:
             setattr(self, name, getattr(self.lib, name))
 
 import os
-cur_dir = os.path.dirname(__file__)
+cur_dir = os.path.dirname(os.path.abspath(__file__))
 kernels = Kernel(
     f"{cur_dir}/quantization",
     [
@@ -59,6 +59,8 @@ def compress_int4_weight(weight: torch.Tensor):  # (n, m)
 def extract_weight_to_half(weight: torch.Tensor, scale_list: torch.Tensor, source_bit_width: int):
     if source_bit_width == 8:
         func = kernels.int8WeightExtractionHalf
+        # out = weight.half() * scale_list[: , ]
+        # return out
     elif source_bit_width == 4:
         func = kernels.int4WeightExtractionHalf
     else:
