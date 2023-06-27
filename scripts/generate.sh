@@ -1,10 +1,12 @@
 #!/bin/bash
 
+export CNCL_MEM_POOL_MULTI_CLIQUE_ENABLE=1
+
 script_path=$(realpath $0)
 script_dir=$(dirname $script_path)
 main_dir=$(dirname $script_dir)
 
-source "${main_dir}/configs/model_glm_130b.sh"
+source "${main_dir}/configs/model_glm_130b_mlu.sh"
 
 SEED=1234
 MAX_OUTPUT_LENGTH=256
@@ -19,6 +21,7 @@ TOPK=0
 TOPP=0.7
 
 ARGS="${main_dir}/generate.py \
+       --distributed-backend cncl \
        --seed $SEED \
        --mode inference \
        --sampling-strategy BaseStrategy \
@@ -34,5 +37,6 @@ ARGS="${main_dir}/generate.py \
        $MODEL_ARGS \
        $*"
 
-run_cmd="torchrun --nproc_per_node $MP_SIZE ${ARGS}"
+run_cmd="python -m torch.distributed.launch --master_port $dist_port \
+       --nproc_per_node $MP_SIZE ${ARGS}"
 eval ${run_cmd}
