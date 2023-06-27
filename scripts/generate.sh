@@ -37,6 +37,7 @@ ARGS="${main_dir}/generate.py \
        $MODEL_ARGS \
        $*"
 
+export dist_port=20233
 run_cmd="python -m torch.distributed.launch --master_port $dist_port \
        --nproc_per_node $MP_SIZE ${ARGS}"
 eval ${run_cmd}
